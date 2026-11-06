@@ -50,8 +50,9 @@ jobs:
         with:
           ocaml-compiler: ${{ env.OCAML_VERSION }}
 
+      # 【改动 1】装编译 keytar 所需：libsecret 开发头 + pkg-config + 工具链
       - name: Install CLI runtime deps
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-0
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config build-essential python3 make g++
 
       - name: Fetch OCaml deps
         working-directory: cli
@@ -74,6 +75,18 @@ jobs:
       - name: Smoke test
         run: node static/logseq-cli.js --version
 
+      # 【改动 2】把 keytar 原生模块从 pnpm 符号链接拷成真实文件，放到产物根 node_modules，并验证可加载
+      - name: Stage native runtime deps (keytar)
+        run: |
+          if [ ! -e node_modules/keytar ]; then
+            echo "::error::keytar not found at node_modules/keytar"
+            exit 1
+          fi
+          REAL=$(readlink -f node_modules/keytar)
+          rm -rf node_modules/keytar
+          cp -rL "$REAL" node_modules/keytar
+          node -e "require('keytar'); console.log('keytar OK')"
+
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
@@ -83,3 +96,4 @@ jobs:
             dist/db-worker-node.js
             dist/db-worker-node-assets.json
             dist/logseq.js
+            node_modules/keytar   # 【改动 3】随产物一起上传
